@@ -32,7 +32,7 @@ if "current_ai_analysis" not in st.session_state:
 @st.cache_data
 def load_chirs_data(file_path):
     try:
-        df = pd.read_excel(file_path, engine='calamine')
+        df = pd.read_excel(file_path, engine='openpyxl')
         for col in ['Geographic area', 'Year', 'Topic Area', 'Indicator Title', 'Data Source', 'Data Notes']:
             if col in df.columns: df[col] = df[col].astype(str).replace('nan', '')
         return df

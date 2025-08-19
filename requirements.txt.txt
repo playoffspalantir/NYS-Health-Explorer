@@ -5,3 +5,5 @@ google-generativeai
 markdown
 openpyxl
 pandas-calamine
+
+# End of requirements

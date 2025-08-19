@@ -7,17 +7,22 @@ from datetime import datetime
 import json
 import html
 import io
+from pathlib import Path # <-- Import the pathlib library
 
 # --- Page Configuration ---
 st.set_page_config(page_title="NYS Health Data Explorer", page_icon="🏥", layout="wide")
 
 # --- Universal API Configuration (SECURE METHOD) ---
-# This will read the API key from Streamlit's secrets manager when deployed.
+# When running locally, this will show an error, which is expected.
+# You can temporarily comment out these lines and hardcode your key for local testing.
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except Exception:
-    # This error will only show up when the secret is not set in the Streamlit Community Cloud.
-    st.error("🚨 Gemini API Key not found. Please add it to your Streamlit secrets.", icon="❗")
+except (KeyError, FileNotFoundError):
+    # This error is expected when running locally without a secrets.toml file.
+    st.error("🚨 Gemini API Key not found. Add it to your Streamlit secrets for deployment.", icon="❗")
+    # For local testing, you can uncomment the line below and paste your key.
+    # genai.configure(api_key="PASTE_YOUR_KEY_HERE_FOR_LOCAL_TESTING")
+
 
 # --- Session State Initialization ---
 if "saved_analyses" not in st.session_state:
@@ -25,21 +30,18 @@ if "saved_analyses" not in st.session_state:
 if "current_ai_analysis" not in st.session_state:
     st.session_state.current_ai_analysis = None
 
-
 # ==============================================================================
 # --- Data Loading & AI Functions (Unchanged) ---
 # ==============================================================================
 @st.cache_data
 def load_chirs_data(file_path):
     try:
-        df = pd.read_excel(file_path, engine='openpyxl')
+        df = pd.read_excel(file_path, engine='openpyxl') # Switched to openpyxl for consistency
         for col in ['Geographic area', 'Year', 'Topic Area', 'Indicator Title', 'Data Source', 'Data Notes']:
             if col in df.columns: df[col] = df[col].astype(str).replace('nan', '')
         return df
     except Exception as e:
-        st.error(f"Error loading CHIRS data: {e}");
-        return None
-
+        st.error(f"Error loading CHIRS data: {e}"); return None
 
 def analyze_chirs_data(df, indicator_name):
     if df.empty: return "No data for analysis."
@@ -50,12 +52,8 @@ def analyze_chirs_data(df, indicator_name):
               f"Focus on the overall trend, identify any significant county-level outliers or divergences, and conclude with a statement on the general pattern observed.\n\n"
               f"Data:\n```{data_string}```")
     try:
-        model = genai.GenerativeModel(model_name='gemini-1.5-flash');
-        response = model.generate_content(prompt);
-        return response.text
-    except Exception as e:
-        return f"AI Analysis Error: {str(e)}"
-
+        model = genai.GenerativeModel(model_name='gemini-1.5-flash'); response = model.generate_content(prompt); return response.text
+    except Exception as e: return f"AI Analysis Error: {str(e)}"
 
 @st.cache_data
 def load_prevention_data(file_path):
@@ -67,9 +65,7 @@ def load_prevention_data(file_path):
         df['Data Years'] = df['Data Years'].astype(str)
         return df
     except Exception as e:
-        st.error(f"Error loading Prevention Agenda data: {e}");
-        return None
-
+        st.error(f"Error loading Prevention Agenda data: {e}"); return None
 
 def analyze_prevention_data(df, indicator_name):
     if df.empty: return "No data for analysis."
@@ -81,12 +77,8 @@ def analyze_prevention_data(df, indicator_name):
               f"Focus on the overall progress of the selected counties toward the 2024 objective, highlighting any counties with notable improvement or worsening trends.\n\n"
               f"Data:\n```{data_string}```")
     try:
-        model = genai.GenerativeModel(model_name='gemini-1.5-flash');
-        response = model.generate_content(prompt);
-        return response.text
-    except Exception as e:
-        return f"AI Analysis Error: {str(e)}"
-
+        model = genai.GenerativeModel(model_name='gemini-1.5-flash'); response = model.generate_content(prompt); return response.text
+    except Exception as e: return f"AI Analysis Error: {str(e)}"
 
 @st.cache_data
 def load_mch_data(file_path):
@@ -97,33 +89,26 @@ def load_mch_data(file_path):
         df['MCH Objective'] = pd.to_numeric(df['MCH Objective'], errors='coerce')
         df['Data Years'] = df['Data Years'].astype(str)
         for col in ['Data Comments', 'Date Source']:
-            if col in df.columns: df[col] = df[col].astype(str).replace('nan', '')
+             if col in df.columns: df[col] = df[col].astype(str).replace('nan', '')
         return df
     except Exception as e:
-        st.error(f"Error loading MCH data: {e}");
-        return None
-
+        st.error(f"Error loading MCH data: {e}"); return None
 
 def analyze_mch_data(df, indicator_name):
     if df.empty: return "No data for analysis."
     data_for_ai = df[['County Name', 'Data Years', 'Percentage/Rate', 'MCH Objective']]
     data_string = data_for_ai.to_csv(index=False)
-    prompt = (
-        f"You are a professional epidemiologist specializing in Maternal and Child Health (MCH), providing an objective, data-driven summary. "
-        f"Based *only* on the trend data for the indicator: '{indicator_name}', write a concise analysis in one or two paragraphs of formal prose. "
-        f"Do not use bullet points, markdown formatting (like bolding), or section titles. "
-        f"Focus on county-level progress towards the MCH Objective and mention if data quality comments (e.g., 'Unstable Estimate') warrant cautious interpretation of the trends.\n\n"
-        f"Data:\n```{data_string}```")
+    prompt = (f"You are a professional epidemiologist specializing in Maternal and Child Health (MCH), providing an objective, data-driven summary. "
+              f"Based *only* on the trend data for the indicator: '{indicator_name}', write a concise analysis in one or two paragraphs of formal prose. "
+              f"Do not use bullet points, markdown formatting (like bolding), or section titles. "
+              f"Focus on county-level progress towards the MCH Objective and mention if data quality comments (e.g., 'Unstable Estimate') warrant cautious interpretation of the trends.\n\n"
+              f"Data:\n```{data_string}```")
     try:
-        model = genai.GenerativeModel(model_name='gemini-1.5-flash');
-        response = model.generate_content(prompt);
-        return response.text
-    except Exception as e:
-        return f"AI Analysis Error: {str(e)}"
-
+        model = genai.GenerativeModel(model_name='gemini-1.5-flash'); response = model.generate_content(prompt); return response.text
+    except Exception as e: return f"AI Analysis Error: {str(e)}"
 
 # ==============================================================================
-# --- Reusable UI and Logic Functions ---
+# --- Reusable UI and Logic Functions (Unchanged) ---
 # ==============================================================================
 def create_chart(df, config):
     chart = alt.Chart(df).mark_line(point=True).encode(
@@ -133,14 +118,10 @@ def create_chart(df, config):
         tooltip=[config['county_col'], config['year_col'], config['value_col']]
     )
     if config.get("objective_col"):
-        objective_line = alt.Chart(df).mark_rule(color=config['objective_color'], strokeDash=[5, 5]).encode(
-            y=f"mean({config['objective_col']}):Q")
-        objective_text = objective_line.mark_text(align='left', baseline='middle', dx=7,
-                                                  text=config['objective_label']).encode(
-            color=alt.value(config['objective_color']))
+        objective_line = alt.Chart(df).mark_rule(color=config['objective_color'], strokeDash=[5,5]).encode(y=f"mean({config['objective_col']}):Q")
+        objective_text = objective_line.mark_text(align='left', baseline='middle', dx=7, text=config['objective_label']).encode(color=alt.value(config['objective_color']))
         return (chart + objective_line + objective_text).interactive()
     return chart.interactive()
-
 
 def render_dashboard(config, df):
     st.sidebar.header("Data Filters")
@@ -155,19 +136,17 @@ def render_dashboard(config, df):
                 temp_df = temp_df[temp_df[prev_filter_config["col"]] == filters[prev_filter_config["label"]]]
         options = sorted(temp_df[f_config["col"]].dropna().unique(), reverse=(f_config["col"] == config["year_col"]))
         if f_config["type"] == "selectbox":
-            filters[f_config["label"]] = st.sidebar.selectbox(f"{i + 1}. {f_config['label']}", options)
+            filters[f_config["label"]] = st.sidebar.selectbox(f"{i+1}. {f_config['label']}", options)
         elif f_config["type"] == "multiselect":
             default_val = f_config.get("default", [])
             if default_val == "all": default_val = options
             default_selection = [d for d in default_val if d in options]
-            filters[f_config["label"]] = st.sidebar.multiselect(f"{i + 1}. {f_config['label']}", options,
-                                                                default=default_selection)
+            filters[f_config["label"]] = st.sidebar.multiselect(f"{i+1}. {f_config['label']}", options, default=default_selection)
     filtered_df = df.copy()
     for f_config in config["filters"]:
         selected_val = filters[f_config["label"]]
         if not selected_val:
-            st.warning(f"⬅️ Please select at least one {f_config['label']}.");
-            return
+            st.warning(f"⬅️ Please select at least one {f_config['label']}."); return
         if isinstance(selected_val, list):
             filtered_df = filtered_df[filtered_df[f_config["col"]].isin(selected_val)]
         else:
@@ -176,8 +155,7 @@ def render_dashboard(config, df):
         filtered_df = filtered_df.dropna(subset=[config["value_col"]])
     st.header(f"📈 Analysis for: {filters[config['indicator_label']]}")
     if filtered_df.empty:
-        st.info("No data available for the current filter combination.");
-        return
+        st.info("No data available for the current filter combination."); return
     final_chart = create_chart(filtered_df, config)
     st.altair_chart(final_chart, use_container_width=True)
     st.subheader("Data Context")
@@ -199,8 +177,7 @@ def render_dashboard(config, df):
                 "raw_data": filtered_df.copy(), "config": config
             }
             st.rerun()
-    if st.session_state.current_ai_analysis and st.session_state.current_ai_analysis["indicator"] == filters[
-        config['indicator_label']]:
+    if st.session_state.current_ai_analysis and st.session_state.current_ai_analysis["indicator"] == filters[config['indicator_label']]:
         current = st.session_state.current_ai_analysis
         st.markdown(current["analysis_text"])
         if st.button("💾 Save This Analysis", key="save_analysis"):
@@ -211,29 +188,25 @@ def render_dashboard(config, df):
     with st.expander("View Filtered Raw Data"):
         st.dataframe(filtered_df)
 
-
 def view_saved_analyses():
-    st.container();
-    st.divider()
+    st.container(); st.divider()
     st.header("📋 Report Builder")
     if not st.session_state.saved_analyses:
-        st.info("No analyses saved yet. Use the '💾 Save This Analysis' button to add them here.");
-        return
+        st.info("No analyses saved yet. Use the '💾 Save This Analysis' button to add them here."); return
     html_parts = []
     indices_to_remove = []
     for i, snap in enumerate(st.session_state.saved_analyses):
         with st.container():
-            st.subheader(f"{i + 1}. {snap['dashboard']}: {snap['indicator']}")
-            if st.button(f"🗑️ Remove Analysis #{i + 1}", key=f"remove_{i}"):
+            st.subheader(f"{i+1}. {snap['dashboard']}: {snap['indicator']}")
+            if st.button(f"🗑️ Remove Analysis #{i+1}", key=f"remove_{i}"):
                 indices_to_remove.append(i)
             st.markdown(snap['analysis_text'])
             st.markdown("---")
-
         chart = create_chart(snap['raw_data'], snap['config']).properties(width='container')
         html_buffer = io.StringIO()
         chart.save(html_buffer, format='html')
         chart_html = html_buffer.getvalue()
-        html_parts.append(f"<h2>{i + 1}. {snap['dashboard']}: {snap['indicator']}</h2>")
+        html_parts.append(f"<h2>{i+1}. {snap['dashboard']}: {snap['indicator']}</h2>")
         html_parts.append(f"<p><strong>Filters:</strong> <code>{snap['filters']}</code></p>")
         html_parts.append(chart_html)
         if snap['data_source']: html_parts.append(f"<p><strong>Source:</strong> {', '.join(snap['data_source'])}</p>")
@@ -252,21 +225,23 @@ def view_saved_analyses():
         label="📥 Download Full Report as HTML (Print to PDF from Browser)",
         data=final_html, file_name="NYS_Health_Data_Report.html", mime="text/html")
 
+# ==============================================================================
+# --- Main App Execution (with ROBUST file paths) ---
+# ==============================================================================
+# Get the absolute path of the directory containing the script
+# This makes the app runnable from any location
+SCRIPT_DIR = Path(__file__).parent
+DATA_DIR = SCRIPT_DIR / "data"
 
-# ==============================================================================
-# --- Main App Execution ---
-# ==============================================================================
 CONFIGS = {
     "CHIRS Indicators": {
         "loader_func": load_chirs_data,
-        "file_path": "data/chir_county_trend.xlsx",
+        "file_path": DATA_DIR / "chir_county_trend.xlsx",
         "analyzer_func": analyze_chirs_data, "title": "CHIRS Indicators",
         "filters": [
             {"label": "Topic Area", "col": "Topic Area", "type": "selectbox"},
             {"label": "Indicator", "col": "Indicator Title", "type": "selectbox"},
-            {"label": "Counties", "col": "Geographic area", "type": "multiselect",
-             "default": ['Westchester County', 'Dutchess County', 'Putnam County', 'Sullivan County', 'Rockland County',
-                         'Orange County', 'Ulster County']},
+            {"label": "Counties", "col": "Geographic area", "type": "multiselect", "default": ['Westchester County', 'Dutchess County', 'Putnam County', 'Sullivan County', 'Rockland County', 'Orange County', 'Ulster County']},
             {"label": "Years", "col": "Year", "type": "multiselect", "default": []}
         ],
         "indicator_label": "Indicator", "county_col": "Geographic area", "year_col": "Year",
@@ -275,14 +250,13 @@ CONFIGS = {
     },
     "Prevention Agenda Trends": {
         "loader_func": load_prevention_data,
-        "file_path": "data/PreventionAgendaTrackingIndicators-CountyTrendData.csv",
+        "file_path": DATA_DIR / "PreventionAgendaTrackingIndicators-CountyTrendData.csv",
         "analyzer_func": analyze_prevention_data, "title": "Prevention Agenda Trends",
         "filters": [
             {"label": "Priority Area", "col": "Priority Area", "type": "selectbox"},
             {"label": "Focus Area", "col": "Focus Area", "type": "selectbox"},
             {"label": "Indicator", "col": "Indicator", "type": "selectbox"},
-            {"label": "Counties", "col": "County Name", "type": "multiselect",
-             "default": ['Westchester', 'Dutchess', 'Putnam', 'Sullivan', 'Rockland', 'Orange', 'Ulster']},
+            {"label": "Counties", "col": "County Name", "type": "multiselect", "default": ['Westchester', 'Dutchess', 'Putnam', 'Sullivan', 'Rockland', 'Orange', 'Ulster']},
             {"label": "Years", "col": "Data Years", "type": "multiselect", "default": "all"}
         ],
         "indicator_label": "Indicator", "county_col": "County Name", "year_col": "Data Years",
@@ -292,13 +266,12 @@ CONFIGS = {
     },
     "MCH Dashboard": {
         "loader_func": load_mch_data,
-        "file_path": "data/MCH-CountyTrendData.xlsx",
+        "file_path": DATA_DIR / "MCH-CountyTrendData.xlsx",
         "analyzer_func": analyze_mch_data, "title": "MCH Dashboard",
         "filters": [
             {"label": "Domain Area", "col": "Domain Area", "type": "selectbox"},
             {"label": "Indicator", "col": "Indicator", "type": "selectbox"},
-            {"label": "Counties", "col": "County Name", "type": "multiselect",
-             "default": ['Westchester', 'Dutchess', 'Putnam', 'Sullivan', 'Rockland', 'Orange', 'Ulster']},
+            {"label": "Counties", "col": "County Name", "type": "multiselect", "default": ['Westchester', 'Dutchess', 'Putnam', 'Sullivan', 'Rockland', 'Orange', 'Ulster']},
             {"label": "Years", "col": "Data Years", "type": "multiselect", "default": "all"}
         ],
         "indicator_label": "Indicator", "county_col": "County Name", "year_col": "Data Years",
